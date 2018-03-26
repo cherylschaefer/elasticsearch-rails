@@ -15,14 +15,27 @@ module Elasticsearch
         #       index_name "articles-#{Rails.env}"
         #     end
         #
+        # @example Set the index name for the `Article` model and re-evaluate it on each call
+        #
+        #     class Article
+        #       index_name { "articles-#{Time.now.year}" }
+        #     end
+        #
         # @example Directly set the index name for the `Article` model
         #
         #     Article.index_name "articles-#{Rails.env}"
         #
-        # TODO: Dynamic names a la Tire -- `Article.index_name { "articles-#{Time.now.year}" }`
         #
-        def index_name name=nil
-          @index_name = name || @index_name || self.model_name.collection.gsub(/\//, '-')
+        def index_name name=nil, &block
+          if name || block_given?
+            return (@index_name = name || block)
+          end
+
+          if @index_name.respond_to?(:call)
+            @index_name.call
+          else
+            @index_name || implicit(:index_name)
+          end
         end
 
         # Set the index name
@@ -45,7 +58,7 @@ module Elasticsearch
         #     Article.document_type "my-article"
         #
         def document_type name=nil
-          @document_type = name || @document_type || self.model_name.element
+          @document_type = name || @document_type || implicit(:document_type)
         end
 
 
@@ -56,6 +69,30 @@ module Elasticsearch
         def document_type=(name)
           @document_type = name
         end
+
+        private
+
+          def implicit(prop)
+            value = nil
+
+            if Elasticsearch::Model.settings[:inheritance_enabled]
+              self.ancestors.each do |klass|
+                next if klass == self
+                break if value = klass.respond_to?(prop) && klass.send(prop)
+              end
+            end
+
+            value || self.send("default_#{prop}")
+          end
+
+          def default_index_name
+            self.model_name.collection.gsub(/\//, '-')
+          end
+
+          def default_document_type
+            self.model_name.element
+          end
+
       end
 
       module InstanceMethods
@@ -67,8 +104,16 @@ module Elasticsearch
         #     @article.index_name "articles-#{@article.user_id}"
         #     @article.__elasticsearch__.update_document
         #
-        def index_name name=nil
-          @index_name = name || @index_name || self.class.index_name
+        def index_name name=nil, &block
+          if name || block_given?
+            return (@index_name = name || block)
+          end
+
+          if @index_name.respond_to?(:call)
+            @index_name.call
+          else
+            @index_name || self.class.index_name
+          end
         end
 
         # Set the index name

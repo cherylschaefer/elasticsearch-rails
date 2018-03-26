@@ -11,7 +11,7 @@ class ::MyRailsModel
   include Elasticsearch::Persistence::Model
   include Elasticsearch::Persistence::Model::Rails
 
-  attribute :name, String, mapping: { analyzer: 'string' }
+  attribute :name, String, mapping: { analyzer: 'english' }
   attribute :published_at, DateTime
   attribute :published_on, Date
 end
@@ -70,6 +70,9 @@ class Elasticsearch::Persistence::ModelRailsTest < Test::Unit::TestCase
                  "published_at(5i)"=>"00"
                 }
 
+      assert_equal '2014-1-1- 12:00:',
+                   Elasticsearch::Persistence::Model::Rails.__convert_rails_dates(params)['published_at']
+
       m = MyRailsModel.new params
       assert_equal "2014-01-01T12:00:00+00:00", m.published_at.iso8601
     end
@@ -80,8 +83,29 @@ class Elasticsearch::Persistence::ModelRailsTest < Test::Unit::TestCase
                  "published_on(3i)"=>"1"
                 }
 
+      assert_equal '2014-1-1-',
+             Elasticsearch::Persistence::Model::Rails.__convert_rails_dates(params)['published_on']
+
+
       m = MyRailsModel.new params
       assert_equal "2014-01-01", m.published_on.iso8601
+    end
+
+    context "when updating," do
+      should "pass the options to gateway" do
+        model = MyRailsModel.new name: 'Test'
+        model.stubs(:persisted?).returns(true)
+
+        model.class.gateway
+          .expects(:update)
+          .with do |object, options|
+            assert_equal 'ABC', options[:routing]
+            true
+          end
+          .returns({'_id' => 'abc123'})
+
+        assert model.update( { title: 'UPDATED' }, { routing: 'ABC' } )
+      end
     end
 
   end

@@ -2,7 +2,19 @@
 
 Persistence layer for Ruby domain objects in Elasticsearch, using the Repository and ActiveRecord patterns.
 
-The library is compatible with Ruby 1.9.3 (or higher) and Elasticsearch 1.0 (or higher).
+## Compatibility
+
+This library is compatible with Ruby 1.9.3 and higher.
+
+The library version numbers follow the Elasticsearch major versions, and the `master` branch
+is compatible with the Elasticsearch `master` branch, therefore, with the next major version.
+
+| Rubygem       |   | Elasticsearch |
+|:-------------:|:-:| :-----------: |
+| 0.1           | → | 1.x           |
+| 2.x           | → | 2.x           |
+| 5.x           | → | 5.x           |
+| master        | → | master        |
 
 ## Installation
 
@@ -12,23 +24,29 @@ Install the package from [Rubygems](https://rubygems.org):
 
 To use an unreleased version, either add it to your `Gemfile` for [Bundler](http://bundler.io):
 
-    gem 'elasticsearch-persistence', git: 'git://github.com/elasticsearch/elasticsearch-rails.git'
+    gem 'elasticsearch-persistence', git: 'git://github.com/elastic/elasticsearch-rails.git', branch: '5.x'
 
 or install it from a source code checkout:
 
-    git clone https://github.com/elasticsearch/elasticsearch-rails.git
+    git clone https://github.com/elastic/elasticsearch-rails.git
     cd elasticsearch-rails/elasticsearch-persistence
     bundle install
     rake install
 
 ## Usage
 
+The library provides two different patterns for adding persistence to your Ruby objects:
+
+* [Repository Pattern](#the-repository-pattern)
+* [ActiveRecord Pattern](#the-activerecord-pattern)
+
 ### The Repository Pattern
 
 The `Elasticsearch::Persistence::Repository` module provides an implementation of the
 [repository pattern](http://martinfowler.com/eaaCatalog/repository.html) and allows
 to save, delete, find and search objects stored in Elasticsearch, as well as configure
-mappings and settings for the index.
+mappings and settings for the index. It's an unobtrusive and decoupled way of adding
+persistence to your Ruby objects.
 
 Let's have a simple plain old Ruby object (PORO):
 
@@ -92,9 +110,9 @@ repository.delete(note)
 => {"found"=>true, "_index"=>"repository", "_type"=>"note", "_id"=>"1", "_version"=>2}
 ```
 
-The repository module provides a number of features and facilities to configure and customize the behaviour:
+The repository module provides a number of features and facilities to configure and customize the behavior:
 
-* Configuring the Elasticsearch [client](https://github.com/elasticsearch/elasticsearch-ruby#usage) being used
+* Configuring the Elasticsearch [client](https://github.com/elastic/elasticsearch-ruby#usage) being used
 * Setting the index name, document type, and object class for deserialization
 * Composing mappings and settings for the index
 * Creating, deleting or refreshing the index
@@ -120,7 +138,7 @@ repository = Elasticsearch::Persistence::Repository.new do
   # Set a custom document type
   type  :my_note
 
-  # Specify the class to inicialize when deserializing documents
+  # Specify the class to initialize when deserializing documents
   klass Note
 
   # Configure the settings and mappings for the Elasticsearch index
@@ -245,7 +263,7 @@ puts repository.find(1).attributes['image']
 
 ##### Client
 
-The repository uses the standard Elasticsearch [client](https://github.com/elasticsearch/elasticsearch-ruby#usage),
+The repository uses the standard Elasticsearch [client](https://github.com/elastic/elasticsearch-ruby#usage),
 which is accessible with the `client` getter and setter methods:
 
 ```ruby
@@ -473,8 +491,8 @@ class Article
   # Define an `author` attribute, with multiple analyzers for this field
   #
   attribute :author, String, mapping: { fields: {
-                               author: { type: 'string'},
-                               raw:    { type: 'string', analyzer: 'keyword' }
+                               author: { type: 'text'},
+                               raw:    { type: 'keyword' }
                              } }
 
 
@@ -488,7 +506,7 @@ class Article
 
   # Execute code after saving the model.
   #
-  after_save { puts "Successfuly saved: #{self}" }
+  after_save { puts "Successfully saved: #{self}" }
 end
 ```
 
@@ -567,7 +585,7 @@ Any callbacks defined in the model will be triggered during the persistence oper
 
 ```ruby
 article.save
-# Successfuly saved: #<Article {...}>
+# Successfully saved: #<Article {...}>
 ```
 
 The model also supports familiar `find_in_batches` and `find_each` methods to efficiently
@@ -575,7 +593,7 @@ retrieve big collections of model instances, using the Elasticsearch's _Scan API
 
 ```ruby
 Article.find_each(_source_include: 'title') { |a| puts "===> #{a.title.upcase}" }
-# GET http://localhost:9200/articles/article/_search?scroll=5m&search_type=scan&size=20
+# GET http://localhost:9200/articles/article/_search?scroll=5m&size=20
 # GET http://localhost:9200/_search/scroll?scroll=5m&scroll_id=c2Nhb...
 # ===> TEST
 # GET http://localhost:9200/_search/scroll?scroll=5m&scroll_id=c2Nhb...
@@ -602,7 +620,32 @@ puts results.response.aggregations.authors.buckets.each { |b| puts "#{b['key']} 
 # John : 1
 ```
 
-#### Accessing the Repository Gateway
+#### The Elasticsearch Client
+
+The module will set up a [client](https://github.com/elastic/elasticsearch-ruby/tree/master/elasticsearch),
+connected to `localhost:9200`, by default.
+
+To use a client with different configuration:
+
+```ruby
+Elasticsearch::Persistence.client = Elasticsearch::Client.new log: true
+```
+
+To set up a specific client for a specific model:
+
+```ruby
+Article.gateway.client = Elasticsearch::Client.new host: 'api.server.org'
+```
+
+You might want to do this during you application bootstrap process, e.g. in a Rails initializer.
+
+Please refer to the
+[`elasticsearch-transport`](https://github.com/elasticsearch/elasticsearch-ruby/tree/master/elasticsearch-transport)
+library documentation for all the configuration options, and to the
+[`elasticsearch-api`](http://rubydoc.info/gems/elasticsearch-api) library documentation
+for information about the Ruby client API.
+
+#### Accessing the Repository Gateway and the Client
 
 The integration with Elasticsearch is implemented by embedding the repository object in the model.
 You can access it through the `gateway` method:
@@ -645,7 +688,7 @@ rails generate scaffold Person name:String email:String birthday:Date --orm=elas
 A fully working Ruby on Rails application can be generated with the following command:
 
 ```bash
-rails new music --force --skip --skip-bundle --skip-active-record --template https://raw.githubusercontent.com/elasticsearch/elasticsearch-rails/master/elasticsearch-persistence/examples/music/template.rb
+rails new music --force --skip --skip-bundle --skip-active-record --template https://raw.githubusercontent.com/elastic/elasticsearch-rails/master/elasticsearch-persistence/examples/music/template.rb
 ```
 
 The application demonstrates:

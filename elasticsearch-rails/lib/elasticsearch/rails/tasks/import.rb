@@ -22,7 +22,7 @@ namespace :elasticsearch do
   task :import => 'import:model'
 
   namespace :import do
-    desc <<-DESC.gsub(/    /, '')
+    import_model_desc = <<-DESC.gsub(/    /, '')
       Import data from your model (pass name as CLASS environment variable).
 
         $ rake environment elasticsearch:import:model CLASS='MyModel'
@@ -39,6 +39,7 @@ namespace :elasticsearch do
       Pass an ActiveRecord scope to limit the imported records:
         $ rake environment elasticsearch:import:model CLASS='Article' SCOPE='published'
     DESC
+    desc import_model_desc
     task :model do
       if ENV['CLASS'].to_s == ''
         puts '='*90, 'USAGE', '='*90, import_model_desc, ""
@@ -59,7 +60,7 @@ namespace :elasticsearch do
         rescue NoMethodError; end
       end
 
-      total_errors = klass.import force:      ENV.fetch('FORCE', false),
+      total_errors = klass.__elasticsearch__.import force:      ENV.fetch('FORCE', false),
                                   batch_size: ENV.fetch('BATCH', 1000).to_i,
                                   index:      ENV.fetch('INDEX', nil),
                                   type:       ENV.fetch('TYPE',  nil),

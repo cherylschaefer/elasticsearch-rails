@@ -8,3 +8,9 @@ coverage/
 rdoc/
 doc/
 Gemfile.lock
+*.swp
+*.sw*
+*.*~
+/.idea
+*.idea
+*.iml

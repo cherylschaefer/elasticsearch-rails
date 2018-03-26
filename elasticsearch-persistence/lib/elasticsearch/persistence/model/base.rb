@@ -52,6 +52,11 @@ module Elasticsearch
           def to_ary # :nodoc:
             nil
           end
+          # Return the raw document `_source`
+          #
+          def _source
+            @_source
+          end
 
           def to_s
             "#<#{self.class} #{attributes.to_hash.inspect.gsub(/:(\w+)=>/, '\1: ')}>"
@@ -68,7 +73,7 @@ module Elasticsearch
         def lookup_type(type)
           case
             when type == String
-              'string'
+              'text'
             when type == Integer
               'integer'
             when type == Float

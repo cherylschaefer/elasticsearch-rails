@@ -51,6 +51,16 @@ class Elasticsearch::Model::AdapterActiveRecordTest < Test::Unit::TestCase
         instance.load
       end
 
+      should "load the records with its submodels when using :includes" do
+        klass    = mock('class', primary_key: :some_key, where: @records)
+        @records.expects(:includes).with([:submodel]).at_least_once
+
+        instance = DummyClassForActiveRecord.new
+        instance.expects(:klass).returns(klass).at_least_once
+        instance.options[:includes] = [:submodel]
+        instance.records
+      end
+
       should "reorder the records based on hits order" do
         @records.instance_variable_set(:@records, @records)
 
@@ -102,6 +112,13 @@ class Elasticsearch::Model::AdapterActiveRecordTest < Test::Unit::TestCase
         DummyClassForActiveRecord.expects(:published).returns(DummyClassForActiveRecord)
 
         DummyClassForActiveRecord.__find_in_batches(scope: :published) do; end
+      end
+
+      should "limit the relation to a specific query" do
+        DummyClassForActiveRecord.expects(:find_in_batches).returns([])
+        DummyClassForActiveRecord.expects(:where).returns(DummyClassForActiveRecord)
+
+        DummyClassForActiveRecord.__find_in_batches(query: -> { where(color: "red") }) do; end
       end
 
       should "preprocess the batch if option provided" do

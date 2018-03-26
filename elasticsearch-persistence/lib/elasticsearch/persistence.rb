@@ -1,7 +1,15 @@
+require 'hashie/mash'
+
 require 'elasticsearch'
+
+require 'elasticsearch/model/hash_wrapper'
 require 'elasticsearch/model/indexing'
+#<<<<<<< HEAD
 require 'hashie'
 require 'jbuilder'
+#=======
+require 'elasticsearch/model/searching'
+#>>>>>>> 585238185f3b7a0452bcb5f4c2c73320d5f961a4
 
 require 'rails/instrumentation/railtie' if defined?(Rails)
 

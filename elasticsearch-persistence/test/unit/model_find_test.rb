@@ -31,8 +31,11 @@ class Elasticsearch::Persistence::ModelFindTest < Test::Unit::TestCase
     end
 
     setup do
-      @gateway         = stub(client: stub(), index_name: 'foo', document_type: 'bar')
+      @gateway = stub(client: stub(), index_name: 'foo', document_type: 'bar')
       DummyFindModel.stubs(:gateway).returns(@gateway)
+
+      DummyFindModel.stubs(:index_name).returns('foo')
+      DummyFindModel.stubs(:document_type).returns('bar')
 
       @response = MultiJson.load <<-JSON
         {
@@ -63,44 +66,46 @@ class Elasticsearch::Persistence::ModelFindTest < Test::Unit::TestCase
     end
 
     should "find all records" do
-      @gateway
-        .expects(:search)
-        .with({ query: { match_all: {} }, size: 10_000 })
+      DummyFindModel
+        .stubs(:search)
+        .with({ query: { match_all: {} }, size: 10_000 }, {})
         .returns(@response)
 
       DummyFindModel.all
     end
 
     should "pass options when finding all records" do
-      @gateway
+      DummyFindModel
         .expects(:search)
-        .with({ query: { match: { title: 'test' } }, size: 10_000, routing: 'abc123' })
+        .with({ query: { match: { title: 'test' } }, size: 10_000 }, { routing: 'abc123' })
         .returns(@response)
 
-      DummyFindModel.all( { query: { match: { title: 'test' } }, routing: 'abc123' } )
+      DummyFindModel.all( { query: { match: { title: 'test' } } }, { routing: 'abc123' } )
     end
 
-    context "finding via scan/scroll" do
+    context "finding via scroll" do
       setup do
         @gateway
         .expects(:deserialize)
-        .with('_source' => {'foo' => 'bar'})
         .returns('_source' => {'foo' => 'bar'})
+        .at_least_once
 
+        # 1. Initial batch of documents and the scroll_id
         @gateway.client
           .expects(:search)
           .with do |arguments|
-            assert_equal 'scan', arguments[:search_type]
             assert_equal 'foo',  arguments[:index]
             assert_equal 'bar',  arguments[:type]
             true
           end
-          .returns(MultiJson.load('{"_scroll_id":"abc123==", "hits":{"hits":[]}}'))
+          .returns(MultiJson.load('{"_scroll_id":"abc123==", "hits":{"hits":[{"_source":{"foo":"bar_1"}}]}}'))
 
+        # 2. Second batch of documents and the scroll_id
+        # 3. Last, empty batch of documents
         @gateway.client
           .expects(:scroll)
           .twice
-          .returns(MultiJson.load('{"_scroll_id":"abc456==", "hits":{"hits":[{"_source":{"foo":"bar"}}]}}'))
+          .returns(MultiJson.load('{"_scroll_id":"abc456==", "hits":{"hits":[{"_source":{"foo":"bar_2"}}]}}'))
           .then
           .returns(MultiJson.load('{"_scroll_id":"abc789==", "hits":{"hits":[]}}'))
       end

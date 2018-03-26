@@ -44,13 +44,14 @@ module Elasticsearch
           # @return [Hash,FalseClass] The Elasticsearch response as a Hash or `false`
           #
           def save(options={})
-            return false unless valid?
+            unless options.delete(:validate) == false
+              return false unless valid?
+            end
 
             run_callbacks :save do
               options.update id: self.id
               options.update index: self._index if self._index
               options.update type:  self._type  if self._type
-
 
               if new_record?
                 response = run_callbacks :create do
@@ -62,6 +63,15 @@ module Elasticsearch
                     @_type     = response['_type']
                     @_version  = response['_version']
                     @persisted = true
+              self[:updated_at] = Time.now.utc
+
+              response = self.class.gateway.save(self, options)
+
+              @_id       = response['_id']
+              @_index    = response['_index']
+              @_type     = response['_type']
+              @_version  = response['_version']
+              @persisted = true
 
                     response
                 end
@@ -113,9 +123,22 @@ module Elasticsearch
           #     p.update name: 'UPDATED'
           #     => {"_index"=>"people", ... "_version"=>2}
           #
+          # @example Pass a version for concurrency control
+          #
+          #     p.update( { name: 'UPDATED' }, { version: 2 } )
+          #     => {"_index"=>"people", ... "_version"=>3}
+          #
+          # @example An exception is raised when the version doesn't match
+          #
+          #     p.update( { name: 'UPDATED' }, { version: 2 } )
+          #     => Elasticsearch::Transport::Transport::Errors::Conflict: [409] {"error" ... }
+          #
           # @return [Hash] The Elasticsearch response as a Hash
           #
           def update(attributes={}, options={})
+            unless options.delete(:validate) == false
+              return false unless valid?
+            end
             raise DocumentNotPersisted, "Object not persisted: #{self.inspect}" unless persisted?
 
             run_callbacks :update do
@@ -123,7 +146,6 @@ module Elasticsearch
               options.update type:  self._type  if self._type
 
               attributes.update( { updated_at: Time.now.utc } )
-
               response = self.class.gateway.update(self.id, { doc: attributes}.merge(options))
 
               self.attributes = self.attributes.merge(attributes)

@@ -1,13 +1,25 @@
 # Elasticsearch::Model
 
 The `elasticsearch-model` library builds on top of the
-the [`elasticsearch`](https://github.com/elasticsearch/elasticsearch-ruby) library.
+the [`elasticsearch`](https://github.com/elastic/elasticsearch-ruby) library.
 
 It aims to simplify integration of Ruby classes ("models"), commonly found
 e.g. in [Ruby on Rails](http://rubyonrails.org) applications, with the
 [Elasticsearch](http://www.elasticsearch.org) search and analytics engine.
 
-The library is compatible with Ruby 1.9.3 and higher.
+## Compatibility
+
+This library is compatible with Ruby 1.9.3 and higher.
+
+The library version numbers follow the Elasticsearch major versions, and the `master` branch
+is compatible with the Elasticsearch `master` branch, therefore, with the next major version.
+
+| Rubygem       |   | Elasticsearch |
+|:-------------:|:-:| :-----------: |
+| 0.1           | → | 1.x           |
+| 2.x           | → | 2.x           |
+| 5.x           | → | 5.x           |
+| master        | → | master        |
 
 ## Installation
 
@@ -17,11 +29,11 @@ Install the package from [Rubygems](https://rubygems.org):
 
 To use an unreleased version, either add it to your `Gemfile` for [Bundler](http://bundler.io):
 
-    gem 'elasticsearch-model', git: 'git://github.com/elasticsearch/elasticsearch-rails.git'
+    gem 'elasticsearch-model', git: 'git://github.com/elastic/elasticsearch-rails.git', branch: '5.x'
 
 or install it from a source code checkout:
 
-    git clone https://github.com/elasticsearch/elasticsearch-rails.git
+    git clone https://github.com/elastic/elasticsearch-rails.git
     cd elasticsearch-rails/elasticsearch-model
     bundle install
     rake install
@@ -109,7 +121,7 @@ See the `Elasticsearch::Model` module documentation for technical information.
 
 ### The Elasticsearch client
 
-The module will set up a [client](https://github.com/elasticsearch/elasticsearch-ruby/tree/master/elasticsearch),
+The module will set up a [client](https://github.com/elastic/elasticsearch-ruby/tree/master/elasticsearch),
 connected to `localhost:9200`, by default. You can access and use it as any other `Elasticsearch::Client`:
 
 ```ruby
@@ -129,10 +141,10 @@ Or configure the client for all models:
 Elasticsearch::Model.client = Elasticsearch::Client.new log: true
 ```
 
-You might want to do this during you application bootstrap process, e.g. in a Rails initializer.
+You might want to do this during your application bootstrap process, e.g. in a Rails initializer.
 
 Please refer to the
-[`elasticsearch-transport`](https://github.com/elasticsearch/elasticsearch-ruby/tree/master/elasticsearch-transport)
+[`elasticsearch-transport`](https://github.com/elastic/elasticsearch-ruby/tree/master/elasticsearch-transport)
 library documentation for all the configuration options, and to the
 [`elasticsearch-api`](http://rubydoc.info/gems/elasticsearch-api) library documentation
 for information about the Ruby client API.
@@ -146,7 +158,7 @@ Article.import
 # => 0
 ```
 
-It's possible to import only records from a specific `scope`, transform the batch with the `transform`
+It's possible to import only records from a specific `scope` or `query`, transform the batch with the `transform`
 and `preprocess` options, or re-create the index by deleting it and creating it with correct mapping with the `force` option -- look for examples in the method documentation.
 
 No errors were reported during importing, so... let's search the index!
@@ -216,8 +228,9 @@ response.records.to_a
 ```
 
 The returned object is the genuine collection of model instances returned by your database,
-i.e. `ActiveRecord::Relation` for ActiveRecord, or `Mongoid::Criteria` in case of MongoDB. This allows you to
-chain other methods on top of search results, as you would normally do:
+i.e. `ActiveRecord::Relation` for ActiveRecord, or `Mongoid::Criteria` in case of MongoDB.
+
+This allows you to chain other methods on top of search results, as you would normally do:
 
 ```ruby
 response.records.where(title: 'Quick brown fox').to_a
@@ -228,7 +241,7 @@ response.records.records.class
 # => ActiveRecord::Relation::ActiveRecord_Relation_Article
 ```
 
-The ordering of the records by score will be preserved, unless you explicitely specify a different
+The ordering of the records by score will be preserved, unless you explicitly specify a different
 order in your model query language:
 
 ```ruby
@@ -240,7 +253,7 @@ response.records.order(:title).to_a
 The `records` method returns the real instances of your model, which is useful when you want to access your
 model methods -- at the expense of slowing down your application, of course.
 In most cases, working with `results` coming from Elasticsearch is sufficient, and much faster. See the
-[`elasticsearch-rails`](https://github.com/elasticsearch/elasticsearch-rails/tree/master/elasticsearch-rails)
+[`elasticsearch-rails`](https://github.com/elastic/elasticsearch-rails/tree/master/elasticsearch-rails)
 library for more information about compatibility with the Ruby on Rails framework.
 
 When you want to access both the database `records` and search `results`, use the `each_with_hit`
@@ -252,11 +265,35 @@ response.records.each_with_hit { |record, hit| puts "* #{record.title}: #{hit._s
 # * Fast black dogs: 0.02250402
 ```
 
+#### Searching multiple models
+
+It is possible to search across multiple models with the module method:
+
+```ruby
+Elasticsearch::Model.search('fox', [Article, Comment]).results.to_a.map(&:to_hash)
+# => [
+#      {"_index"=>"articles", "_type"=>"article", "_id"=>"1", "_score"=>0.35136628, "_source"=>...},
+#      {"_index"=>"comments", "_type"=>"comment", "_id"=>"1", "_score"=>0.35136628, "_source"=>...}
+#    ]
+
+Elasticsearch::Model.search('fox', [Article, Comment]).records.to_a
+# Article Load (0.3ms)  SELECT "articles".* FROM "articles" WHERE "articles"."id" IN (1)
+# Comment Load (0.2ms)  SELECT "comments".* FROM "comments" WHERE "comments"."id" IN (1,5)
+# => [#<Article id: 1, title: "Quick brown fox">, #<Comment id: 1, body: "Fox News">,  ...]
+```
+
+By default, all models which include the `Elasticsearch::Model` module are searched.
+
+NOTE: It is _not_ possible to chain other methods on top of the `records` object, since it
+      is a heterogenous collection, with models potentially backed by different databases.
+
 #### Pagination
 
 You can implement pagination with the `from` and `size` search parameters. However, search results
 can be automatically paginated with the [`kaminari`](http://rubygems.org/gems/kaminari) or
 [`will_paginate`](https://github.com/mislav/will_paginate) gems.
+(The pagination gems must be added before the Elasticsearch gems in your Gemfile,
+or loaded first in your application.)
 
 If Kaminari or WillPaginate is loaded, use the familiar paging methods:
 
@@ -265,7 +302,7 @@ response.page(2).results
 response.page(2).records
 ```
 
-In a Rails controller, use the the `params[:page]` parameter to paginate through results:
+In a Rails controller, use the `params[:page]` parameter to paginate through results:
 
 ```ruby
 @articles = Article.search(params[:q]).page(params[:page]).records
@@ -278,7 +315,7 @@ In a Rails controller, use the the `params[:page]` parameter to paginate through
 To initialize and include the Kaminari pagination support manually:
 
 ```ruby
-Kaminari::Hooks.init
+Kaminari::Hooks.init if defined?(Kaminari::Hooks)
 Elasticsearch::Model::Response::Response.__send__ :include, Elasticsearch::Model::Response::Pagination::Kaminari
 ```
 
@@ -295,8 +332,8 @@ response.results.first.highlight.title
 # ["Quick brown <em>fox</em>"]
 ```
 
-You can pass any object which implements a `to_hash` method, or you can use your favourite JSON builder
-to build the search definition as a JSON string:
+You can pass any object which implements a `to_hash` method, which is called automatically,
+so you can use a custom class or your favourite JSON builder to build the search definition:
 
 ```ruby
 require 'jbuilder'
@@ -316,10 +353,33 @@ response.results.first.title
 # => "Quick brown fox"
 ```
 
+Also, you can use the [**`elasticsearch-dsl`**](https://github.com/elastic/elasticsearch-ruby/tree/master/elasticsearch-dsl) library, which provides a specialized Ruby API for
+the Elasticsearch Query DSL:
+
+```ruby
+require 'elasticsearch/dsl'
+
+query = Elasticsearch::DSL::Search.search do
+  query do
+    match :title do
+      query 'fox dogs'
+    end
+  end
+end
+
+response = Article.search query
+response.results.first.title
+# => "Quick brown fox"
+```
+
 ### Index Configuration
 
 For proper search engine function, it's often necessary to configure the index properly.
 The `Elasticsearch::Model` integration provides class methods to set up index settings and mappings.
+
+**NOTE**: Elasticsearch will automatically create an index when a document is indexed,
+          with default settings and mappings. Create the index in advance with the `create_index!`
+          method, so your index configuration is respected.
 
 ```ruby
 class Article
@@ -422,7 +482,7 @@ class Article
 end
 ```
 
-For ActiveRecord-based models, you need to hook into the `after_commit` callback, to protect
+For ActiveRecord-based models, use the `after_commit` callback to protect
 your data against inconsistencies caused by transaction rollbacks:
 
 ```ruby
@@ -430,15 +490,15 @@ class Article < ActiveRecord::Base
   include Elasticsearch::Model
 
   after_commit on: [:create] do
-    index_document if self.published?
+    __elasticsearch__.index_document if self.published?
   end
 
   after_commit on: [:update] do
-    update_document if self.published?
+    __elasticsearch__.update_document if self.published?
   end
 
   after_commit on: [:destroy] do
-    delete_document if self.published?
+    __elasticsearch__.delete_document if self.published?
   end
 end
 ```
@@ -659,6 +719,18 @@ response.records.records.class
 
 More examples can be found in the `examples` folder. Please see the `Elasticsearch::Model::Adapter`
 module and its submodules for technical information.
+
+### Settings
+
+The module provides a common `settings` method to customize various features.
+
+At the moment, the only supported setting is `:inheritance_enabled`, which makes the class receiving the module
+respect index names and document types of a super-class, eg. in case you're using "single table inheritance" (STI)
+in Rails:
+
+```ruby
+Elasticsearch::Model.settings[:inheritance_enabled] = true
+```
 
 ## Development and Community
 
